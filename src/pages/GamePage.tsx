@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import type { Room, Player, GameLogEntry } from '../types/game';
-import { subscribeToRoom } from '../services/roomService';
+import { subscribeToRoom, updateRoomState } from '../services/roomService';
 import {
   canTokenMove,
   getValidMoves,
@@ -66,8 +64,7 @@ export const GamePage: React.FC = () => {
         onSpeakingChange: (speaking) => {
           setIsSpeaking(speaking);
           // Broadcast speaking indicator to room
-          const roomRef = doc(db, 'rooms', roomId);
-          updateDoc(roomRef, {
+          updateRoomState(roomId, {
             players: (room?.players || []).map((p) =>
               p.id === userProfile.uid ? { ...p, isSpeaking: speaking } : p
             ),
@@ -154,7 +151,7 @@ export const GamePage: React.FC = () => {
     if (!room.game.diceRolling && room.game.diceValue === null) {
       const rollTimeout = setTimeout(async () => {
         await executeDiceRoll(true);
-      }, 800);
+      }, 700);
       return () => clearTimeout(rollTimeout);
     }
 
@@ -175,7 +172,7 @@ export const GamePage: React.FC = () => {
           // No moves available, pass turn
           await passTurnToNext(room.players, room.game.activePlayerIndex, 'No valid moves available.');
         }
-      }, 1000);
+      }, 900);
       return () => clearTimeout(moveTimeout);
     }
   }, [
@@ -198,7 +195,6 @@ export const GamePage: React.FC = () => {
 
     // Generate roll (1 to 6)
     const rolledValue = Math.floor(Math.random() * 6) + 1;
-    const roomRef = doc(db, 'rooms', roomId);
 
     // Check triple six penalty
     const consecutiveSixes = rolledValue === 6 ? room.game.consecutiveSixes + 1 : 0;
@@ -212,7 +208,7 @@ export const GamePage: React.FC = () => {
         color: activePlayer.color,
       };
 
-      await updateDoc(roomRef, {
+      await updateRoomState(roomId, {
         'game.diceValue': 6,
         'game.diceRolling': false,
         'game.consecutiveSixes': 0,
@@ -225,8 +221,8 @@ export const GamePage: React.FC = () => {
       return;
     }
 
-    // Set rolling animation in firestore
-    await updateDoc(roomRef, {
+    // Set rolling animation in room
+    await updateRoomState(roomId, {
       'game.diceRolling': true,
       'game.diceValue': rolledValue,
     });
@@ -253,7 +249,7 @@ export const GamePage: React.FC = () => {
 
         const nextIdx = getNextPlayerIndex(room.players, room.game.activePlayerIndex);
 
-        await updateDoc(roomRef, {
+        await updateRoomState(roomId, {
           'game.diceRolling': false,
           'game.diceValue': rolledValue,
           'game.consecutiveSixes': consecutiveSixes,
@@ -265,7 +261,7 @@ export const GamePage: React.FC = () => {
         });
       } else {
         // Tokens can move! Wait for player selection
-        await updateDoc(roomRef, {
+        await updateRoomState(roomId, {
           'game.diceRolling': false,
           'game.diceValue': rolledValue,
           'game.consecutiveSixes': consecutiveSixes,
@@ -319,9 +315,7 @@ export const GamePage: React.FC = () => {
       nextConsecutiveSixes = 0;
     }
 
-    const roomRef = doc(db, 'rooms', roomId);
-
-    await updateDoc(roomRef, {
+    await updateRoomState(roomId, {
       players: result.updatedPlayers,
       'game.status': isGameFinished ? 'completed' : 'in_progress',
       'game.activePlayerIndex': isGameFinished ? room.game.activePlayerIndex : nextPlayerIdx,
@@ -347,9 +341,8 @@ export const GamePage: React.FC = () => {
   const passTurnToNext = async (players: Player[], currentIdx: number, reason: string) => {
     if (!roomId || !room) return;
     const nextIdx = getNextPlayerIndex(players, currentIdx);
-    const roomRef = doc(db, 'rooms', roomId);
 
-    await updateDoc(roomRef, {
+    await updateRoomState(roomId, {
       'game.activePlayerIndex': nextIdx,
       'game.diceValue': null,
       'game.diceRolling': false,

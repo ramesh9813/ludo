@@ -29,25 +29,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync profile from Firestore or create initial doc
   const syncProfile = async (uid: string, name: string, email: string, photoURL: string) => {
     const userRef = doc(db, 'users', uid);
-    const snap = await getDoc(userRef);
-
-    if (snap.exists()) {
-      setUserProfile(snap.data() as UserProfile);
-    } else {
-      const initialProfile: UserProfile = {
-        uid,
-        displayName: name || 'Ludo Master',
-        email: email || '',
-        photoURL: photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${uid}`,
-        rating: 1200,
-        wins: 0,
-        losses: 0,
-        matchesPlayed: 0,
-        level: 6,
-        lastActive: Date.now(),
-      };
-      await setDoc(userRef, initialProfile);
-      setUserProfile(initialProfile);
+    try {
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        setUserProfile(snap.data() as UserProfile);
+      } else {
+        const initialProfile: UserProfile = {
+          uid,
+          displayName: name || 'Ludo Master',
+          email: email || '',
+          photoURL: photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${uid}`,
+          rating: 1200,
+          wins: 0,
+          losses: 0,
+          matchesPlayed: 0,
+          level: 6,
+          lastActive: Date.now(),
+        };
+        await setDoc(userRef, initialProfile).catch(() => {});
+        setUserProfile(initialProfile);
+      }
+    } catch (e) {
+      console.warn('Profile sync fallback:', e);
     }
 
     // Subscribe to live profile changes
@@ -55,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (docSnap.exists()) {
         setUserProfile(docSnap.data() as UserProfile);
       }
-    });
+    }, () => {});
   };
 
   useEffect(() => {
@@ -77,6 +80,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const parsed = JSON.parse(guestData) as UserProfile;
           setUserProfile(parsed);
+          // Sync guest to Firestore so other players can match with them
+          const userRef = doc(db, 'users', parsed.uid);
+          setDoc(userRef, parsed).catch(() => {});
         } catch {}
       } else {
         setCurrentUser(null);
@@ -106,10 +112,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInAsGuest = async (customName?: string) => {
-    const guestId = `guest_${Math.random().toString(36).substring(2, 9)}`;
+    // Retain or create consistent guest ID
+    const existing = localStorage.getItem('ludo_guest_profile');
+    let guestId = `guest_${Math.random().toString(36).substring(2, 9)}`;
+    if (existing) {
+      try {
+        const p = JSON.parse(existing);
+        if (p.uid) guestId = p.uid;
+      } catch {}
+    }
+
     const guestProfile: UserProfile = {
       uid: guestId,
-      displayName: customName || `Player_${guestId.substring(6, 10)}`,
+      displayName: customName || `Guest_${guestId.substring(6, 10)}`,
       email: `${guestId}@guest.local`,
       photoURL: `https://api.dicebear.com/7.x/adventurer/svg?seed=${guestId}`,
       rating: 1200,
@@ -119,8 +134,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       level: 6,
       lastActive: Date.now(),
     };
+
     localStorage.setItem('ludo_guest_profile', JSON.stringify(guestProfile));
     setUserProfile(guestProfile);
+
+    // Save to Firestore so other matchmakers and games recognize this guest
+    const userRef = doc(db, 'users', guestId);
+    await setDoc(userRef, guestProfile).catch(() => {});
   };
 
   const signOut = async () => {

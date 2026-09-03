@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { UserProfile, Room, AIDifficulty } from '../types/game';
-import { createRoom } from './roomService';
+import { createRoom, joinRoomByCode } from './roomService';
 
 export interface QueueTicket {
   userId: string;
@@ -26,7 +26,7 @@ export interface QueueTicket {
   createdAt: number;
 }
 
-// Join the matchmaking queue
+// Join the matchmaking queue (works for both Google and Guest players)
 export async function enterMatchmakingQueue(
   user: UserProfile,
   maxPlayers: 2 | 3 | 4 = 4
@@ -41,7 +41,7 @@ export async function enterMatchmakingQueue(
     createdAt: Date.now(),
   };
 
-  await setDoc(ticketRef, ticketData);
+  await setDoc(ticketRef, ticketData).catch((e) => console.warn('Queue write:', e));
 
   return () => {
     deleteDoc(ticketRef).catch(() => {});
@@ -75,56 +75,82 @@ export function listenForMatch(
   });
 }
 
-// Find existing players in queue within ELO range and group them
+// Find existing players in queue (including guest players) or open public rooms
 export async function tryFindMatch(
   user: UserProfile,
   maxPlayers: 2 | 3 | 4 = 4
 ): Promise<string | null> {
-  const queueRef = collection(db, 'matchmakingQueue');
-  const q = query(
-    queueRef,
-    where('maxPlayers', '==', maxPlayers),
-    limit(maxPlayers)
-  );
+  try {
+    // 1. First check if an open public room already exists with available seats
+    const roomsRef = collection(db, 'rooms');
+    const openRoomsQuery = query(
+      roomsRef,
+      where('maxPlayers', '==', maxPlayers),
+      where('isPrivate', '==', false),
+      limit(10)
+    );
 
-  const snap = await getDocs(q);
-  const candidates: QueueTicket[] = [];
-
-  snap.forEach((d) => {
-    const ticket = d.data() as QueueTicket;
-    if (ticket.userId !== user.uid && !ticket.roomId) {
-      // Skill check: within 250 ELO points
-      const diff = Math.abs(ticket.rating - (user.rating || 1200));
-      if (diff <= 300) {
-        candidates.push(ticket);
+    const openRoomsSnap = await getDocs(openRoomsQuery).catch(() => null);
+    if (openRoomsSnap && !openRoomsSnap.empty) {
+      for (const roomDoc of openRoomsSnap.docs) {
+        const room = roomDoc.data() as Room;
+        if (
+          room.game.status === 'waiting' &&
+          room.players.length < room.maxPlayers &&
+          !room.playerUids.includes(user.uid)
+        ) {
+          const joinedId = await joinRoomByCode(room.code, user);
+          if (joinedId) {
+            await leaveMatchmakingQueue(user.uid);
+            return joinedId;
+          }
+        }
       }
     }
-  });
 
-  if (candidates.length >= maxPlayers - 1) {
-    // We have a full group!
-    const group = [
-      { uid: user.uid, name: user.displayName, rating: user.rating, photoURL: user.photoURL },
-      ...candidates.map((c) => ({
-        uid: c.userId,
-        name: c.userName,
-        rating: c.rating,
-        photoURL: c.userAvatar,
-      })),
-    ];
+    // 2. Check matchmaking queue for other players (including guests!)
+    const queueRef = collection(db, 'matchmakingQueue');
+    const q = query(
+      queueRef,
+      where('maxPlayers', '==', maxPlayers),
+      limit(10)
+    );
 
-    // Create room with group
-    const roomId = await createRoom(user, maxPlayers, maxPlayers, 'medium', false);
+    const snap = await getDocs(q).catch(() => null);
+    if (!snap || snap.empty) return null;
 
-    // Notify other players by writing roomId to their tickets
-    for (const c of candidates) {
-      const ticketDoc = doc(db, 'matchmakingQueue', c.userId);
-      await updateDoc(ticketDoc, { roomId });
+    const candidates: QueueTicket[] = [];
+
+    snap.forEach((d) => {
+      const ticket = d.data() as QueueTicket;
+      if (ticket.userId !== user.uid && !ticket.roomId) {
+        // Skill check: within 350 ELO points
+        const diff = Math.abs(ticket.rating - (user.rating || 1200));
+        if (diff <= 350) {
+          candidates.push(ticket);
+        }
+      }
+    });
+
+    // If we have at least 1 other human player/guest
+    if (candidates.length >= 1) {
+      const selectedCandidates = candidates.slice(0, maxPlayers - 1);
+      const totalHumans = 1 + selectedCandidates.length;
+
+      // Create room with all matched humans (and fill any remaining seats with AI bots)
+      const roomId = await createRoom(user, maxPlayers, totalHumans, 'medium', false);
+
+      // Notify other players/guests by updating their queue ticket with roomId
+      for (const c of selectedCandidates) {
+        const ticketDoc = doc(db, 'matchmakingQueue', c.userId);
+        await updateDoc(ticketDoc, { roomId }).catch(() => {});
+      }
+
+      await leaveMatchmakingQueue(user.uid);
+      return roomId;
     }
-
-    // Clean up my ticket
-    await leaveMatchmakingQueue(user.uid);
-    return roomId;
+  } catch (err) {
+    console.warn('tryFindMatch error:', err);
   }
 
   return null;
@@ -148,28 +174,32 @@ export async function updateUserStats(
   rank: number = 1
 ) {
   const userRef = doc(db, 'users', userId);
-  const snap = await getDoc(userRef);
-  if (!snap.exists()) return;
+  try {
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return;
 
-  const user = snap.data() as UserProfile;
-  let ratingDelta = 0;
-  if (rank === 1) ratingDelta = +25;
-  else if (rank === 2) ratingDelta = +10;
-  else if (rank === 3) ratingDelta = -10;
-  else ratingDelta = -20;
+    const user = snap.data() as UserProfile;
+    let ratingDelta = 0;
+    if (rank === 1) ratingDelta = +25;
+    else if (rank === 2) ratingDelta = +10;
+    else if (rank === 3) ratingDelta = -10;
+    else ratingDelta = -20;
 
-  const newRating = Math.max(600, (user.rating || 1200) + ratingDelta);
-  const newWins = (user.wins || 0) + (rank === 1 ? 1 : 0);
-  const newLosses = (user.losses || 0) + (rank > 1 ? 1 : 0);
-  const newMatches = (user.matchesPlayed || 0) + 1;
-  const newLevel = Math.floor(newRating / 200);
+    const newRating = Math.max(600, (user.rating || 1200) + ratingDelta);
+    const newWins = (user.wins || 0) + (rank === 1 ? 1 : 0);
+    const newLosses = (user.losses || 0) + (rank > 1 ? 1 : 0);
+    const newMatches = (user.matchesPlayed || 0) + 1;
+    const newLevel = Math.floor(newRating / 200);
 
-  await updateDoc(userRef, {
-    rating: newRating,
-    wins: newWins,
-    losses: newLosses,
-    matchesPlayed: newMatches,
-    level: newLevel,
-    lastActive: Date.now(),
-  });
+    await updateDoc(userRef, {
+      rating: newRating,
+      wins: newWins,
+      losses: newLosses,
+      matchesPlayed: newMatches,
+      level: newLevel,
+      lastActive: Date.now(),
+    });
+  } catch (e) {
+    console.warn('Failed to update stats online:', e);
+  }
 }

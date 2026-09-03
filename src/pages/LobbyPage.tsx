@@ -8,7 +8,7 @@ import {
   tryFindMatch,
   createInstantMatchWithAI,
 } from '../services/matchmaking';
-import { createRoom, joinRoomByCode } from '../services/roomService';
+import { createRoom, createLocalRoom, joinRoomByCode } from '../services/roomService';
 import type { AIDifficulty } from '../types/game';
 import {
   Users,
@@ -21,7 +21,8 @@ import {
   X,
   Clock,
   Sparkles,
-  Award,
+  Gamepad2,
+  Cpu,
 } from 'lucide-react';
 
 export const LobbyPage: React.FC = () => {
@@ -36,10 +37,11 @@ export const LobbyPage: React.FC = () => {
   // Custom Room Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [customPlayers, setCustomPlayers] = useState<2 | 3 | 4>(4);
-  const [targetHumans, setTargetHumans] = useState<number>(2);
+  const [targetHumans, setTargetHumans] = useState<number>(1); // Default to 1 human + 3 bots
   const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('medium');
   const [isPrivate, setIsPrivate] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Join by code state
   const [joinCode, setJoinCode] = useState('');
@@ -117,11 +119,19 @@ export const LobbyPage: React.FC = () => {
     navigate(`/room/${roomId}`);
   };
 
+  // Instant 1 Human vs 3 Computer Bots
+  const handlePlayLocal1v3 = () => {
+    if (!userProfile) return;
+    const roomId = createLocalRoom(userProfile, 4, 'medium');
+    navigate(`/game/${roomId}`);
+  };
+
   const handleCreateCustomRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
     try {
       setCreatingRoom(true);
+      setCreateError(null);
       const roomId = await createRoom(
         userProfile,
         customPlayers,
@@ -129,9 +139,15 @@ export const LobbyPage: React.FC = () => {
         aiDifficulty,
         isPrivate
       );
-      navigate(`/room/${roomId}`);
-    } catch (err) {
+      // If 1 human (local/offline bots), jump straight into game!
+      if (targetHumans === 1) {
+        navigate(`/game/${roomId}`);
+      } else {
+        navigate(`/room/${roomId}`);
+      }
+    } catch (err: unknown) {
       console.error(err);
+      setCreateError((err as Error).message || 'Failed to create room. Please try again.');
     } finally {
       setCreatingRoom(false);
     }
@@ -208,6 +224,33 @@ export const LobbyPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Featured Quick Action: 1 Player vs 3 Computer Bots */}
+      <div className="mb-6 p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-teal-950/60 border border-emerald-500/40 shadow-2xl backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
+        <div className="flex items-center gap-4 text-center sm:text-left">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+            <Gamepad2 size={28} />
+          </div>
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider mb-1">
+              <Cpu size={12} />
+              <span>Instant Local Match</span>
+            </div>
+            <h3 className="text-xl font-black text-white">Play Local: 1 Player vs 3 Computer Bots</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Jump straight into the board game against 3 adaptive AI opponents. Instant start with zero wait!
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handlePlayLocal1v3}
+          className="w-full sm:w-auto py-3.5 px-7 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap"
+        >
+          <Play size={17} className="fill-slate-950" />
+          <span>Start 1 vs 3 Bots</span>
+        </button>
+      </div>
+
       {/* Main Game Mode Options Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Card 1: Quick Matchmaking */}
@@ -217,7 +260,7 @@ export const LobbyPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 text-rose-400 text-xs font-bold uppercase tracking-wider mb-2">
               <Zap size={15} />
-              <span>Skill-Matched Battle</span>
+              <span>Online Ranked</span>
             </div>
             <h3 className="text-2xl font-black text-white">Quick Match</h3>
             <p className="text-xs text-slate-400 mt-1">
@@ -298,7 +341,7 @@ export const LobbyPage: React.FC = () => {
             </div>
             <h3 className="text-xl font-black text-white">Create Custom Match</h3>
             <p className="text-xs text-slate-400 mt-1">
-              Configure human vs computer players, customize AI difficulty, or create a private game with an invite link.
+              Configure human vs computer players (e.g. 1 human + 3 bots), AI difficulty, or invite friends with a code.
             </p>
 
             <button
@@ -357,6 +400,12 @@ export const LobbyPage: React.FC = () => {
             <h3 className="text-xl font-black text-white">Configure Custom Room</h3>
             <p className="text-xs text-slate-400 mt-1">Setup player count and AI behavior</p>
 
+            {createError && (
+              <p className="mt-3 p-2.5 rounded-xl bg-rose-950/50 border border-rose-500/50 text-rose-300 text-xs">
+                {createError}
+              </p>
+            )}
+
             <form onSubmit={handleCreateCustomRoom} className="mt-5 space-y-4">
               {/* Total Players */}
               <div>
@@ -386,9 +435,14 @@ export const LobbyPage: React.FC = () => {
 
               {/* Humans vs AI */}
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                  Target Real Players (remaining filled with AI):
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-300">
+                    Real Human Players:
+                  </label>
+                  <span className="text-[11px] text-amber-400 font-semibold">
+                    {customPlayers - targetHumans} Computer (AI) Bots
+                  </span>
+                </div>
                 <div className="grid grid-cols-4 gap-2">
                   {Array.from({ length: customPlayers }, (_, i) => i + 1).map((h) => (
                     <button
@@ -397,14 +451,20 @@ export const LobbyPage: React.FC = () => {
                       onClick={() => setTargetHumans(h)}
                       className={`py-2 rounded-xl text-xs font-bold border transition-all ${
                         targetHumans === h
-                          ? 'bg-emerald-600 border-emerald-500 text-white'
+                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.4)]'
                           : 'bg-slate-950 border-slate-800 text-slate-400'
                       }`}
                     >
-                      {h} Human{h > 1 ? 's' : ''}
+                      {h === 1 ? '1 (You)' : `${h} Humans`}
                     </button>
                   ))}
                 </div>
+                {targetHumans === 1 && (
+                  <p className="text-[10px] text-emerald-400 mt-1.5 flex items-center gap-1">
+                    <Sparkles size={12} />
+                    <span>Single Player: You vs {customPlayers - 1} Bots (Starts immediately!)</span>
+                  </p>
+                )}
               </div>
 
               {/* AI Difficulty */}
@@ -430,23 +490,29 @@ export const LobbyPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Private Room Toggle */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-xs font-bold text-slate-300">Private Match (Code Only)</span>
-                <input
-                  type="checkbox"
-                  checked={isPrivate}
-                  onChange={(e) => setIsPrivate(e.target.checked)}
-                  className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
-                />
-              </div>
+              {/* Private Room Toggle (only if more than 1 human) */}
+              {targetHumans > 1 && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-xs font-bold text-slate-300">Private Match (Invite Code Only)</span>
+                  <input
+                    type="checkbox"
+                    checked={isPrivate}
+                    onChange={(e) => setIsPrivate(e.target.checked)}
+                    className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
+                  />
+                </div>
+              )}
 
               <button
                 type="submit"
                 disabled={creatingRoom}
                 className="w-full mt-2 py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-rose-600 to-emerald-600 hover:from-rose-500 hover:to-emerald-500 text-white shadow-lg transition-all active:scale-95"
               >
-                {creatingRoom ? 'Creating Room...' : 'Create Room & Enter'}
+                {creatingRoom
+                  ? 'Creating Room...'
+                  : targetHumans === 1
+                  ? 'Start Match vs 3 Bots'
+                  : 'Create Room & Enter'}
               </button>
             </form>
           </div>
