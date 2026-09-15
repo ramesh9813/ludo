@@ -22,13 +22,16 @@ import { PostGameModal } from '../components/PostGameModal';
 
 import { ArrowLeft, MessageSquare, Volume2, Info } from 'lucide-react';
 
+// Seconds a player gets to roll the dice / pick a token before auto-play
+const TURN_SECONDS = 2;
+
 export const GamePage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const { userProfile } = useAuth();
   const navigate = useNavigate();
 
   const [room, setRoom] = useState<Room | null>(null);
-  const [turnTimer, setTurnTimer] = useState<number>(20);
+  const [turnTimer, setTurnTimer] = useState<number>(TURN_SECONDS);
   const [showLogs, setShowLogs] = useState(false);
 
   // WebRTC Voice Chat State
@@ -109,7 +112,7 @@ export const GamePage: React.FC = () => {
     prevActivePlayerRef.current = room.game.activePlayerIndex;
   }, [room?.game.activePlayerIndex, userProfile, room?.players]);
 
-  // Turn timer countdown (20s turn limit)
+  // Turn timer countdown (2s turn limit)
   useEffect(() => {
     if (!room || room.game.status !== 'in_progress') return;
 
@@ -118,7 +121,7 @@ export const GamePage: React.FC = () => {
         if (prev <= 1) {
           // Time expired! Auto-skip or trigger AI auto-move
           handleTurnTimeout();
-          return 20;
+          return TURN_SECONDS;
         }
         return prev - 1;
       });
@@ -129,7 +132,7 @@ export const GamePage: React.FC = () => {
 
   // Reset timer on turn change
   useEffect(() => {
-    setTurnTimer(20);
+    setTurnTimer(TURN_SECONDS);
   }, [room?.game.activePlayerIndex]);
 
   // If active player is an AI, automate their turn
