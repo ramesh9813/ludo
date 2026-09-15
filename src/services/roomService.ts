@@ -15,7 +15,6 @@ import { generateRoomCode, createInitialTokens } from './gameLogic';
 
 const COLORS: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
 
-const AI_NAMES = ['Aero Bot', 'Cyber Pawn', 'Nova AI', 'Pulse Bot', 'Echo Unit'];
 const AI_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=Aero',
   'https://api.dicebear.com/7.x/bottts/svg?seed=Cyber',
@@ -76,7 +75,7 @@ export function createLocalRoom(
 
     players.push({
       id: `ai_${Math.random().toString(36).substring(2, 9)}`,
-      name: `${AI_NAMES[i % AI_NAMES.length]} (${aiDifficulty.toUpperCase()})`,
+      name: `Bot ${players.filter((p) => p.isAi).length + 1}`,
       avatar: AI_AVATARS[i % AI_AVATARS.length],
       color,
       isAi: true,
@@ -169,7 +168,7 @@ export async function createRoom(
     const color = COLORS[players.length];
     players.push({
       id: `ai_${Math.random().toString(36).substring(2, 9)}`,
-      name: `${AI_NAMES[i % AI_NAMES.length]} (${aiDifficulty.toUpperCase()})`,
+      name: `Bot ${players.filter((p) => p.isAi).length + 1}`,
       avatar: AI_AVATARS[i % AI_AVATARS.length],
       color,
       isAi: true,
@@ -373,11 +372,10 @@ export async function fillEmptySeatsWithAI(roomId: string) {
 
     for (let i = 0; i < needed; i++) {
       const color = COLORS[room.players.length % COLORS.length];
-      const botIdx = room.players.length;
       room.players.push({
         id: `ai_${Math.random().toString(36).substring(2, 9)}`,
-        name: `${AI_NAMES[botIdx % AI_NAMES.length]} (${room.aiDifficulty.toUpperCase()})`,
-        avatar: AI_AVATARS[botIdx % AI_AVATARS.length],
+        name: `Bot ${room.players.filter((p) => p.isAi).length + 1}`,
+        avatar: AI_AVATARS[i % AI_AVATARS.length],
         color,
         isAi: true,
         aiDifficulty: room.aiDifficulty,
@@ -404,11 +402,10 @@ export async function fillEmptySeatsWithAI(roomId: string) {
   const newPlayers = [...room.players];
   for (let i = 0; i < needed; i++) {
     const color = COLORS[newPlayers.length % COLORS.length];
-    const botIdx = newPlayers.length;
     newPlayers.push({
       id: `ai_${Math.random().toString(36).substring(2, 9)}`,
-      name: `${AI_NAMES[botIdx % AI_NAMES.length]} (${room.aiDifficulty.toUpperCase()})`,
-      avatar: AI_AVATARS[botIdx % AI_AVATARS.length],
+      name: `Bot ${newPlayers.filter((p) => p.isAi).length + 1}`,
+      avatar: AI_AVATARS[i % AI_AVATARS.length],
       color,
       isAi: true,
       aiDifficulty: room.aiDifficulty,

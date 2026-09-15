@@ -151,7 +151,7 @@ export const GamePage: React.FC = () => {
     if (!room.game.diceRolling && room.game.diceValue === null) {
       const rollTimeout = setTimeout(async () => {
         await executeDiceRoll(true);
-      }, 250);
+      }, 600);
       return () => clearTimeout(rollTimeout);
     }
 
@@ -172,7 +172,7 @@ export const GamePage: React.FC = () => {
           // No moves available, pass turn
           await passTurnToNext(room.players, room.game.activePlayerIndex, 'No valid moves available.');
         }
-      }, 350);
+      }, 800);
       return () => clearTimeout(moveTimeout);
     }
   }, [
