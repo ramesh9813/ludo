@@ -21,7 +21,7 @@ export const LandingPage: React.FC = () => {
       const next = Math.floor(Math.random() * 6) + 1;
       setDemoRoll(next);
       setIsDemoRolling(false);
-    }, 900);
+    }, 350);
   };
 
   const handleGoogleLogin = async () => {

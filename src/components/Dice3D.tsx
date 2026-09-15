@@ -50,7 +50,7 @@ export const Dice3D: React.FC<Dice3DProps> = ({
           setDisplayValue(value);
           sounds.playDiceResult(value);
         }
-      }, 900);
+      }, 350);
       return () => clearTimeout(timer);
     } else if (value) {
       setDisplayValue(value);
@@ -100,7 +100,7 @@ export const Dice3D: React.FC<Dice3DProps> = ({
             transform: internalRoll
               ? undefined
               : `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) rotateZ(${rotation.z}deg)`,
-            transitionDuration: internalRoll ? '0s' : '0.6s',
+            transitionDuration: internalRoll ? '0s' : '0.25s',
           }}
         >
           {/* Face 1 (Front) */}

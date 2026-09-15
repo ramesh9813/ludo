@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import type { Player, PlayerColor, TokenState } from '../types/game';
+import type { Player, PlayerColor } from '../types/game';
 import { TokenPiece } from './TokenPiece';
 import { SAFE_TILES, START_OFFSETS, TOTAL_TRACK_TILES } from '../services/gameLogic';
 
@@ -131,6 +131,61 @@ const BASE_POCKETS: Record<PlayerColor, Array<{ col: number; row: number }>> = {
   ],
 };
 
+// Single flat color per player — used for yard, start tile, home line, center triangle.
+export const PLAYER_SOLID: Record<PlayerColor, string> = {
+  red: '#DC2626',
+  green: '#16A34A',
+  yellow: '#EAB308',
+  blue: '#2563EB',
+};
+
+const GRID_LINE = 'rgba(15, 23, 42, 0.55)';
+
+function Yard({
+  color,
+  position,
+}: {
+  color: PlayerColor;
+  position: 'tl' | 'tr' | 'bl' | 'br';
+}) {
+  const solid = PLAYER_SOLID[color];
+  const posClass =
+    position === 'tl'
+      ? 'top-0 left-0 border-r border-b'
+      : position === 'tr'
+        ? 'top-0 right-0 border-l border-b'
+        : position === 'bl'
+          ? 'bottom-0 left-0 border-r border-t'
+          : 'bottom-0 right-0 border-l border-t';
+
+  return (
+    <div
+      className={`absolute ${posClass} w-[40%] h-[40%] flex items-center justify-center`}
+      style={{ backgroundColor: solid, borderColor: '#0f172a', borderWidth: 0 }}
+    >
+      {/* white inner house */}
+      <div
+        className="w-[68%] h-[68%] bg-white flex items-center justify-center"
+        style={{ border: '2px solid #0f172a', borderRadius: 6 }}
+      >
+        <div className="w-full h-full grid grid-cols-2 grid-rows-2 place-items-center p-[12%] gap-0">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="w-[78%] aspect-square rounded-full"
+              style={{
+                backgroundColor: solid,
+                border: '2px solid #0f172a',
+                boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.25)',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const LudoBoard: React.FC<LudoBoardProps> = ({
   players,
   activePlayerIndex,
@@ -138,8 +193,6 @@ export const LudoBoard: React.FC<LudoBoardProps> = ({
   canMove,
   onSelectToken,
 }) => {
-  const activePlayer = players[activePlayerIndex];
-
   // Map every token on the board to its (col, row) coordinates
   const placedTokens = useMemo(() => {
     const list: Array<{
@@ -159,14 +212,11 @@ export const LudoBoard: React.FC<LudoBoardProps> = ({
         let coords: { col: number; row: number };
 
         if (token.step === -1) {
-          // Inside yard base
           coords = BASE_POCKETS[player.color][token.id];
         } else if (token.step >= 0 && token.step <= 50) {
-          // On common perimeter track
           const globalIdx = (START_OFFSETS[player.color] + token.step) % TOTAL_TRACK_TILES;
           coords = TRACK_COORDINATES[globalIdx];
         } else {
-          // Inside home stretch (step 51..56)
           const stretchIdx = Math.min(5, token.step - 51);
           coords = HOME_RUNWAYS[player.color][stretchIdx];
         }
@@ -205,221 +255,186 @@ export const LudoBoard: React.FC<LudoBoardProps> = ({
       let offsetY = 0;
 
       if (totalInGroup > 1) {
-        // Distribute slightly so all are visible
         const angle = (indexInGroup / totalInGroup) * Math.PI * 2;
         offsetX = Math.cos(angle) * 7;
         offsetY = Math.sin(angle) * 7;
       }
 
-      return {
-        ...t,
-        offsetX,
-        offsetY,
-      };
+      return { ...t, offsetX, offsetY };
     });
   }, [placedTokens]);
 
+  const cellSize = `${(1 / 15) * 100}%`;
+
   return (
-    <div className="ludo-board-wrapper relative w-full max-w-[580px] aspect-square rounded-3xl p-3 sm:p-4 bg-slate-900/90 border border-slate-700/60 shadow-2xl backdrop-blur-xl select-none">
-      {/* 15x15 SVG / Grid Board Surface */}
-      <div className="relative w-full h-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner">
-        {/* Four Corner Yards (6x6 each) */}
-        {/* Green Yard (Top-Left) */}
-        <div className="absolute top-0 left-0 w-[40%] h-[40%] bg-gradient-to-br from-emerald-500/20 to-emerald-950/60 border-r border-b border-emerald-500/30 p-3 flex items-center justify-center">
-          <div className="w-[75%] h-[75%] rounded-2xl bg-emerald-950/70 border-2 border-emerald-500/40 p-2 grid grid-cols-2 grid-rows-2 gap-2 shadow-inner">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="rounded-full bg-emerald-900/50 border border-emerald-400/40 shadow-inner flex items-center justify-center" />
-            ))}
-          </div>
+    <div
+      className="ludo-board-classic relative w-full aspect-square select-none bg-white overflow-hidden"
+      style={{
+        border: '3px solid #0f172a',
+        borderRadius: 0,
+        lineHeight: 1,
+      }}
+    >
+      {/* Four solid corner yards */}
+      <Yard color="green" position="tl" />
+      <Yard color="yellow" position="tr" />
+      <Yard color="red" position="bl" />
+      <Yard color="blue" position="br" />
+
+      {/* Center home — 4 flat triangles */}
+      <div
+        className="absolute bg-white overflow-hidden"
+        style={{
+          top: '40%',
+          left: '40%',
+          width: '20%',
+          height: '20%',
+          border: '2px solid #0f172a',
+        }}
+      >
+        <div className="absolute inset-0" style={{ clipPath: 'polygon(0 0, 100% 0, 50% 50%)', backgroundColor: PLAYER_SOLID.green }} />
+        <div className="absolute inset-0" style={{ clipPath: 'polygon(100% 0, 100% 100%, 50% 50%)', backgroundColor: PLAYER_SOLID.yellow }} />
+        <div className="absolute inset-0" style={{ clipPath: 'polygon(0 100%, 100% 100%, 50% 50%)', backgroundColor: PLAYER_SOLID.blue }} />
+        <div className="absolute inset-0" style={{ clipPath: 'polygon(0 0, 0 100%, 50% 50%)', backgroundColor: PLAYER_SOLID.red }} />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white flex items-center justify-center"
+          style={{ width: '34%', aspectRatio: '1/1', borderRadius: 9999, border: '2px solid #0f172a' }}
+        >
+          <span style={{ fontSize: 'clamp(10px, 2.4vmin, 18px)' }}>👑</span>
         </div>
-
-        {/* Yellow Yard (Top-Right) */}
-        <div className="absolute top-0 right-0 w-[40%] h-[40%] bg-gradient-to-bl from-amber-500/20 to-amber-950/60 border-l border-b border-amber-500/30 p-3 flex items-center justify-center">
-          <div className="w-[75%] h-[75%] rounded-2xl bg-amber-950/70 border-2 border-amber-500/40 p-2 grid grid-cols-2 grid-rows-2 gap-2 shadow-inner">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="rounded-full bg-amber-900/50 border border-amber-400/40 shadow-inner flex items-center justify-center" />
-            ))}
-          </div>
-        </div>
-
-        {/* Red Yard (Bottom-Left) */}
-        <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-gradient-to-tr from-rose-500/20 to-rose-950/60 border-r border-t border-rose-500/30 p-3 flex items-center justify-center">
-          <div className="w-[75%] h-[75%] rounded-2xl bg-rose-950/70 border-2 border-rose-500/40 p-2 grid grid-cols-2 grid-rows-2 gap-2 shadow-inner">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="rounded-full bg-rose-900/50 border border-rose-400/40 shadow-inner flex items-center justify-center" />
-            ))}
-          </div>
-        </div>
-
-        {/* Blue Yard (Bottom-Right) */}
-        <div className="absolute bottom-0 right-0 w-[40%] h-[40%] bg-gradient-to-tl from-blue-500/20 to-blue-950/60 border-l border-t border-blue-500/30 p-3 flex items-center justify-center">
-          <div className="w-[75%] h-[75%] rounded-2xl bg-blue-950/70 border-2 border-blue-500/40 p-2 grid grid-cols-2 grid-rows-2 gap-2 shadow-inner">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="rounded-full bg-blue-900/50 border border-blue-400/40 shadow-inner flex items-center justify-center" />
-            ))}
-          </div>
-        </div>
-
-        {/* Center Home Triangle (3x3 grid area) */}
-        <div className="absolute top-[40%] left-[40%] w-[20%] h-[20%] bg-slate-900 border border-slate-700/80 shadow-2xl flex items-center justify-center overflow-hidden">
-          {/* 4 Colored Triangles */}
-          <div
-            className="absolute inset-0"
-            style={{
-              clipPath: 'polygon(0 0, 100% 0, 50% 50%)',
-              background: 'linear-gradient(to bottom, #10b981, #064e3b)',
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              clipPath: 'polygon(100% 0, 100% 100%, 50% 50%)',
-              background: 'linear-gradient(to left, #f59e0b, #78350f)',
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              clipPath: 'polygon(0 100%, 100% 100%, 50% 50%)',
-              background: 'linear-gradient(to top, #3b82f6, #1e3a8a)',
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              clipPath: 'polygon(0 0, 0 100%, 50% 50%)',
-              background: 'linear-gradient(to right, #ef4444, #881337)',
-            }}
-          />
-          {/* Central Crown / Trophy Emblem */}
-          <div className="relative z-10 w-7 h-7 rounded-full bg-slate-950/90 border border-amber-400/60 shadow-lg flex items-center justify-center">
-            <span className="text-xs">👑</span>
-          </div>
-        </div>
-
-        {/* 52 Perimeter Tiles + 20 Home Runway Tiles */}
-        {TRACK_COORDINATES.map((pos, idx) => {
-          const isSafe = SAFE_TILES.has(idx);
-          const isRedStart = idx === 0;
-          const isGreenStart = idx === 13;
-          const isYellowStart = idx === 26;
-          const isBlueStart = idx === 39;
-
-          let cellBg = 'bg-slate-900/60 border-slate-800/80';
-          if (isRedStart) cellBg = 'bg-rose-950/80 border-rose-500/50';
-          else if (isGreenStart) cellBg = 'bg-emerald-950/80 border-emerald-500/50';
-          else if (isYellowStart) cellBg = 'bg-amber-950/80 border-amber-500/50';
-          else if (isBlueStart) cellBg = 'bg-blue-950/80 border-blue-500/50';
-
-          return (
-            <div
-              key={`track_${idx}`}
-              className={`absolute border text-[9px] font-bold flex items-center justify-center transition-colors ${cellBg}`}
-              style={{
-                width: `${(1 / 15) * 100}%`,
-                height: `${(1 / 15) * 100}%`,
-                left: `${(pos.col / 15) * 100}%`,
-                top: `${(pos.row / 15) * 100}%`,
-              }}
-            >
-              {isSafe && (
-                <span className="text-amber-400/90 text-[10px] drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]">
-                  ★
-                </span>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Colored Home Runways */}
-        {/* Red Home Runway (row 7, cols 1..5) */}
-        {[1, 2, 3, 4, 5].map((c) => (
-          <div
-            key={`red_runway_${c}`}
-            className="absolute border border-rose-600/40 bg-gradient-to-r from-rose-950/90 to-rose-700/80 flex items-center justify-center shadow-inner"
-            style={{
-              width: `${(1 / 15) * 100}%`,
-              height: `${(1 / 15) * 100}%`,
-              left: `${(c / 15) * 100}%`,
-              top: `${(7 / 15) * 100}%`,
-            }}
-          >
-            <span className="text-rose-400 text-[8px] opacity-60">▶</span>
-          </div>
-        ))}
-
-        {/* Green Home Runway (col 7, rows 1..5) */}
-        {[1, 2, 3, 4, 5].map((r) => (
-          <div
-            key={`green_runway_${r}`}
-            className="absolute border border-emerald-600/40 bg-gradient-to-b from-emerald-950/90 to-emerald-700/80 flex items-center justify-center shadow-inner"
-            style={{
-              width: `${(1 / 15) * 100}%`,
-              height: `${(1 / 15) * 100}%`,
-              left: `${(7 / 15) * 100}%`,
-              top: `${(r / 15) * 100}%`,
-            }}
-          >
-            <span className="text-emerald-400 text-[8px] opacity-60">▼</span>
-          </div>
-        ))}
-
-        {/* Yellow Home Runway (row 7, cols 9..13) */}
-        {[9, 10, 11, 12, 13].map((c) => (
-          <div
-            key={`yellow_runway_${c}`}
-            className="absolute border border-amber-600/40 bg-gradient-to-l from-amber-950/90 to-amber-700/80 flex items-center justify-center shadow-inner"
-            style={{
-              width: `${(1 / 15) * 100}%`,
-              height: `${(1 / 15) * 100}%`,
-              left: `${(c / 15) * 100}%`,
-              top: `${(7 / 15) * 100}%`,
-            }}
-          >
-            <span className="text-amber-400 text-[8px] opacity-60">◀</span>
-          </div>
-        ))}
-
-        {/* Blue Home Runway (col 7, rows 9..13) */}
-        {[9, 10, 11, 12, 13].map((r) => (
-          <div
-            key={`blue_runway_${r}`}
-            className="absolute border border-blue-600/40 bg-gradient-to-t from-blue-950/90 to-blue-700/80 flex items-center justify-center shadow-inner"
-            style={{
-              width: `${(1 / 15) * 100}%`,
-              height: `${(1 / 15) * 100}%`,
-              left: `${(7 / 15) * 100}%`,
-              top: `${(r / 15) * 100}%`,
-            }}
-          >
-            <span className="text-blue-400 text-[8px] opacity-60">▲</span>
-          </div>
-        ))}
-
-        {/* Dynamic Tokens Layer with Smooth Hopping Interpolation */}
-        {tokensWithOffset.map((t) => {
-          const leftPercent = ((t.col + 0.5) / 15) * 100;
-          const topPercent = ((t.row + 0.5) / 15) * 100;
-
-          return (
-            <div
-              key={`${t.playerColor}_token_${t.tokenId}`}
-              className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out"
-              style={{
-                left: `calc(${leftPercent}% + ${t.offsetX}px)`,
-                top: `calc(${topPercent}% + ${t.offsetY}px)`,
-              }}
-            >
-              <TokenPiece
-                color={t.playerColor}
-                id={t.tokenId}
-                isSelectable={t.isSelectable}
-                onClick={() => onSelectToken(t.tokenId)}
-              />
-            </div>
-          );
-        })}
       </div>
+
+      {/* 52 perimeter track cells */}
+      {TRACK_COORDINATES.map((pos, idx) => {
+        const isSafe = SAFE_TILES.has(idx);
+        const startColor: PlayerColor | null =
+          idx === 0 ? 'red' : idx === 13 ? 'green' : idx === 26 ? 'yellow' : idx === 39 ? 'blue' : null;
+
+        const bg = startColor ? PLAYER_SOLID[startColor] : '#FFFFFF';
+
+        return (
+          <div
+            key={`track_${idx}`}
+            className="absolute flex items-center justify-center"
+            style={{
+              width: cellSize,
+              height: cellSize,
+              left: `${(pos.col / 15) * 100}%`,
+              top: `${(pos.row / 15) * 100}%`,
+              backgroundColor: bg,
+              border: `1px solid ${GRID_LINE}`,
+              color: startColor ? '#fff' : '#475569',
+              fontSize: 'clamp(7px, 1.8vmin, 13px)',
+              fontWeight: 800,
+            }}
+          >
+            {startColor ? (
+              <span style={{ color: '#fff' }}>★</span>
+            ) : (
+              isSafe && <span>★</span>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Home lines — one single solid color per player */}
+      {[1, 2, 3, 4, 5].map((c) => (
+        <div
+          key={`red_runway_${c}`}
+          className="absolute flex items-center justify-center"
+          style={{
+            width: cellSize,
+            height: cellSize,
+            left: `${(c / 15) * 100}%`,
+            top: `${(7 / 15) * 100}%`,
+            backgroundColor: PLAYER_SOLID.red,
+            border: `1px solid ${GRID_LINE}`,
+            color: '#fff',
+            fontSize: 'clamp(6px, 1.6vmin, 11px)',
+          }}
+        >
+          ▶
+        </div>
+      ))}
+      {[1, 2, 3, 4, 5].map((r) => (
+        <div
+          key={`green_runway_${r}`}
+          className="absolute flex items-center justify-center"
+          style={{
+            width: cellSize,
+            height: cellSize,
+            left: `${(7 / 15) * 100}%`,
+            top: `${(r / 15) * 100}%`,
+            backgroundColor: PLAYER_SOLID.green,
+            border: `1px solid ${GRID_LINE}`,
+            color: '#fff',
+            fontSize: 'clamp(6px, 1.6vmin, 11px)',
+          }}
+        >
+          ▼
+        </div>
+      ))}
+      {[9, 10, 11, 12, 13].map((c) => (
+        <div
+          key={`yellow_runway_${c}`}
+          className="absolute flex items-center justify-center"
+          style={{
+            width: cellSize,
+            height: cellSize,
+            left: `${(c / 15) * 100}%`,
+            top: `${(7 / 15) * 100}%`,
+            backgroundColor: PLAYER_SOLID.yellow,
+            border: `1px solid ${GRID_LINE}`,
+            color: '#fff',
+            fontSize: 'clamp(6px, 1.6vmin, 11px)',
+          }}
+        >
+          ◀
+        </div>
+      ))}
+      {[9, 10, 11, 12, 13].map((r) => (
+        <div
+          key={`blue_runway_${r}`}
+          className="absolute flex items-center justify-center"
+          style={{
+            width: cellSize,
+            height: cellSize,
+            left: `${(7 / 15) * 100}%`,
+            top: `${(r / 15) * 100}%`,
+            backgroundColor: PLAYER_SOLID.blue,
+            border: `1px solid ${GRID_LINE}`,
+            color: '#fff',
+            fontSize: 'clamp(6px, 1.6vmin, 11px)',
+          }}
+        >
+          ▲
+        </div>
+      ))}
+
+      {/* Tokens */}
+      {tokensWithOffset.map((t) => {
+        const leftPercent = ((t.col + 0.5) / 15) * 100;
+        const topPercent = ((t.row + 0.5) / 15) * 100;
+
+        return (
+          <div
+            key={`${t.playerColor}_token_${t.tokenId}`}
+            className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out"
+            style={{
+              left: `calc(${leftPercent}% + ${t.offsetX}px)`,
+              top: `calc(${topPercent}% + ${t.offsetY}px)`,
+              zIndex: t.isSelectable ? 30 : 20,
+            }}
+          >
+            <TokenPiece
+              color={t.playerColor}
+              id={t.tokenId}
+              isSelectable={t.isSelectable}
+              onClick={() => onSelectToken(t.tokenId)}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 };

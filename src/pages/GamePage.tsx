@@ -151,7 +151,7 @@ export const GamePage: React.FC = () => {
     if (!room.game.diceRolling && room.game.diceValue === null) {
       const rollTimeout = setTimeout(async () => {
         await executeDiceRoll(true);
-      }, 700);
+      }, 250);
       return () => clearTimeout(rollTimeout);
     }
 
@@ -172,7 +172,7 @@ export const GamePage: React.FC = () => {
           // No moves available, pass turn
           await passTurnToNext(room.players, room.game.activePlayerIndex, 'No valid moves available.');
         }
-      }, 900);
+      }, 350);
       return () => clearTimeout(moveTimeout);
     }
   }, [
@@ -271,7 +271,7 @@ export const GamePage: React.FC = () => {
           'game.lastActionTimestamp': Date.now(),
         });
       }
-    }, 900);
+    }, 350);
   };
 
   // Move Token
@@ -389,52 +389,111 @@ export const GamePage: React.FC = () => {
   const activePlayer = room.players[room.game.activePlayerIndex];
   const isMyTurn = userProfile && activePlayer && activePlayer.id === userProfile.uid;
   const humanCount = room.players.filter((p) => !p.isAi).length;
+  const topPlayers = room.players.slice(0, Math.ceil(room.players.length / 2));
+  const bottomPlayers = room.players.slice(Math.ceil(room.players.length / 2));
+  const activeDot =
+    activePlayer.color === 'red'
+      ? '#DC2626'
+      : activePlayer.color === 'green'
+        ? '#16A34A'
+        : activePlayer.color === 'yellow'
+          ? '#EAB308'
+          : '#2563EB';
 
   return (
-    <div className="game-arena max-w-6xl mx-auto px-3 sm:px-4 py-4 min-h-[calc(100vh-64px)] flex flex-col justify-between">
-      {/* Top Bar: Back, Voice Chat Bar, Log Toggle */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-3">
+    <div className="w-full h-[calc(100dvh-64px)] flex flex-col overflow-hidden bg-slate-950">
+      {/* Slim full-width top strip — no margins */}
+      <div className="shrink-0 h-11 flex items-center gap-2 px-2 border-b border-slate-800 bg-slate-900">
         <button
           onClick={() => navigate('/lobby')}
-          className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-white transition-colors self-start sm:self-auto"
+          className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-white transition-colors shrink-0"
         >
           <ArrowLeft size={16} />
-          <span>Exit Table</span>
+          <span className="hidden sm:inline">Exit</span>
         </button>
 
-        {/* Live Voice Chat Bar */}
-        <div className="w-full sm:w-auto flex-1 max-w-md mx-auto">
-          <VoiceChatBar
-            voiceManager={voiceManagerRef.current}
-            isMicActive={isMicActive}
-            isMuted={isMuted}
-            isSpeaking={isSpeaking}
-            onEnableMic={enableMic}
-            onToggleMute={toggleMute}
-            humanCount={humanCount}
+        <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
+          <span
+            className="w-3 h-3 rounded-full shrink-0 border border-black/40"
+            style={{ backgroundColor: activeDot }}
           />
+          <span className="text-xs font-black text-white truncate">
+            {isMyTurn ? 'YOUR TURN' : activePlayer.name}
+          </span>
+          <span className="text-[11px] font-mono font-bold text-amber-300 bg-slate-800 px-1.5 py-0.5 rounded-md shrink-0">
+            {turnTimer}s
+          </span>
         </div>
 
-        {/* Game Log Drawer Button */}
-        <button
-          onClick={() => setShowLogs(!showLogs)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all self-end sm:self-auto ${
-            showLogs
-              ? 'bg-rose-600/20 border-rose-500/60 text-rose-300'
-              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-          }`}
-        >
-          <MessageSquare size={14} />
-          <span>Log</span>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="hidden sm:inline text-[10px] text-slate-400 font-semibold">
+            {humanCount} online
+          </span>
+          {isMicActive ? (
+            <button
+              onClick={toggleMute}
+              className={`p-1.5 rounded-lg border text-xs font-bold ${
+                isMuted
+                  ? 'bg-rose-500/20 border-rose-500/60 text-rose-300'
+                  : 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+              }`}
+              title={isMuted ? 'Unmute' : 'Mute'}
+            >
+              <Volume2 size={14} />
+            </button>
+          ) : (
+            <button
+              onClick={enableMic}
+              className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+            >
+              Join Voice
+            </button>
+          )}
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className={`p-1.5 rounded-lg border transition-all ${
+              showLogs
+                ? 'bg-rose-600/20 border-rose-500/60 text-rose-300'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+            }`}
+            title="Match log"
+          >
+            <MessageSquare size={14} />
+          </button>
+        </div>
       </div>
 
-      {/* Main Board & Players Layout */}
-      <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-6 my-auto">
-        {/* Left / Top Players (e.g. Green and Red) */}
-        <div className="w-full lg:w-48 flex lg:flex-col gap-3 justify-between">
-          {room.players.slice(0, Math.ceil(room.players.length / 2)).map((p, idx) => (
-            <div key={p.id} className="flex-1 lg:flex-initial">
+      {/* Middle: players + square board, fills all remaining space */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+        {/* Desktop left players */}
+        <div className="hidden lg:flex w-64 shrink-0 flex-col gap-2 p-3 overflow-y-auto border-r border-slate-800 bg-slate-900/40">
+          {topPlayers.map((p, idx) => (
+            <PlayerCard
+              key={p.id}
+              player={p}
+              isActive={room.game.activePlayerIndex === idx}
+              isCurrentClient={userProfile?.uid === p.id}
+              onToggleMute={toggleMute}
+              timerSeconds={room.game.activePlayerIndex === idx ? turnTimer : undefined}
+            />
+          ))}
+          <div className="mt-auto hidden xl:block w-full">
+            <VoiceChatBar
+              voiceManager={voiceManagerRef.current}
+              isMicActive={isMicActive}
+              isMuted={isMuted}
+              isSpeaking={isSpeaking}
+              onEnableMic={enableMic}
+              onToggleMute={toggleMute}
+              humanCount={humanCount}
+            />
+          </div>
+        </div>
+
+        {/* Mobile top players */}
+        <div className="lg:hidden shrink-0 flex gap-2 px-2 pt-2 overflow-x-auto">
+          {topPlayers.map((p, idx) => (
+            <div key={p.id} className="flex-1 min-w-[168px]">
               <PlayerCard
                 player={p}
                 isActive={room.game.activePlayerIndex === idx}
@@ -446,58 +505,25 @@ export const GamePage: React.FC = () => {
           ))}
         </div>
 
-        {/* Center: Ludo Board + Rolling Action Area */}
-        <div className="flex flex-col items-center gap-4">
-          <LudoBoard
-            players={room.players}
-            activePlayerIndex={room.game.activePlayerIndex}
-            validTokenMoves={room.game.validTokenMoves}
-            canMove={isMyTurn && room.game.mustMoveToken}
-            onSelectToken={handleMoveToken}
-          />
-
-          {/* Interactive 3D Dice & Turn Banner */}
-          <div className="flex items-center justify-center gap-8 py-2 px-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl backdrop-blur-md">
-            <div className="text-center sm:text-left">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                Current Turn
-              </span>
-              <span className="text-sm font-black text-white flex items-center gap-1.5">
-                <span
-                  className="w-2.5 h-2.5 rounded-full inline-block"
-                  style={{
-                    backgroundColor:
-                      activePlayer.color === 'red'
-                        ? '#ef4444'
-                        : activePlayer.color === 'green'
-                        ? '#22c55e'
-                        : activePlayer.color === 'yellow'
-                        ? '#eab308'
-                        : '#3b82f6',
-                  }}
-                />
-                {isMyTurn ? 'YOUR TURN' : activePlayer.name}
-              </span>
-            </div>
-
-            {/* 3D Dice */}
-            <Dice3D
-              value={room.game.diceValue}
-              isRolling={room.game.diceRolling}
-              canRoll={isMyTurn && !room.game.mustMoveToken && !room.game.diceRolling}
-              playerColor={activePlayer.color}
-              onRoll={() => executeDiceRoll(false)}
-              size={64}
+        {/* Center: square board, zero margin/padding, always square */}
+        <div className="flex-1 min-h-0 min-w-0 flex items-center justify-center bg-[#070d1a] p-0">
+          <div className="aspect-square w-[min(100vw,calc(100dvh-268px))] lg:w-[min(calc(100vw-512px),calc(100dvh-158px))] max-w-full max-h-full leading-none">
+            <LudoBoard
+              players={room.players}
+              activePlayerIndex={room.game.activePlayerIndex}
+              validTokenMoves={room.game.validTokenMoves}
+              canMove={Boolean(isMyTurn) && room.game.mustMoveToken}
+              onSelectToken={handleMoveToken}
             />
           </div>
         </div>
 
-        {/* Right / Bottom Players (e.g. Yellow and Blue) */}
-        <div className="w-full lg:w-48 flex lg:flex-col gap-3 justify-between">
-          {room.players.slice(Math.ceil(room.players.length / 2)).map((p, idx) => {
-            const actualIdx = Math.ceil(room.players.length / 2) + idx;
+        {/* Mobile bottom players */}
+        <div className="lg:hidden shrink-0 flex gap-2 px-2 pb-2 overflow-x-auto">
+          {bottomPlayers.map((p, idx) => {
+            const actualIdx = topPlayers.length + idx;
             return (
-              <div key={p.id} className="flex-1 lg:flex-initial">
+              <div key={p.id} className="flex-1 min-w-[168px]">
                 <PlayerCard
                   player={p}
                   isActive={room.game.activePlayerIndex === actualIdx}
@@ -509,6 +535,43 @@ export const GamePage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Desktop right players */}
+        <div className="hidden lg:flex w-64 shrink-0 flex-col gap-2 p-3 overflow-y-auto border-l border-slate-800 bg-slate-900/40">
+          {bottomPlayers.map((p, idx) => {
+            const actualIdx = topPlayers.length + idx;
+            return (
+              <PlayerCard
+                key={p.id}
+                player={p}
+                isActive={room.game.activePlayerIndex === actualIdx}
+                isCurrentClient={userProfile?.uid === p.id}
+                onToggleMute={toggleMute}
+                timerSeconds={room.game.activePlayerIndex === actualIdx ? turnTimer : undefined}
+              />
+            );
+          })}
+          <div className="mt-auto text-[11px] text-slate-500 font-mono px-1 flex items-center gap-1.5">
+            <Info size={12} />
+            <span>Exact roll needed for home</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom dice bar — full width, compact */}
+      <div className="shrink-0 border-t border-slate-800 bg-slate-900 px-3 py-1.5 flex items-center justify-center gap-5">
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400 font-semibold">
+          <Info size={13} />
+          <span>{room.game.mustMoveToken ? 'Tap a glowing token' : isMyTurn ? 'Roll the dice' : `Waiting on ${activePlayer.name}…`}</span>
+        </div>
+        <Dice3D
+          value={room.game.diceValue}
+          isRolling={room.game.diceRolling}
+          canRoll={Boolean(isMyTurn) && !room.game.mustMoveToken && !room.game.diceRolling}
+          playerColor={activePlayer.color}
+          onRoll={() => executeDiceRoll(false)}
+          size={56}
+        />
       </div>
 
       {/* Slide-out Event / Game Log Modal */}

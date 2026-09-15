@@ -23,9 +23,9 @@ class SoundEffectsManager {
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const count = 7;
+    const count = 4;
     for (let i = 0; i < count; i++) {
-      const delay = i * 0.08 + Math.random() * 0.04;
+      const delay = i * 0.05 + Math.random() * 0.02;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 

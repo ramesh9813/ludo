@@ -10,30 +10,22 @@ interface PlayerCardProps {
   timerSeconds?: number;
 }
 
-const COLOR_THEMES: Record<PlayerColor, { text: string; bg: string; border: string; glow: string }> = {
+const COLOR_THEMES: Record<PlayerColor, { text: string; solid: string }> = {
   red: {
-    text: 'text-rose-400',
-    bg: 'bg-rose-950/40',
-    border: 'border-rose-500/50',
-    glow: 'shadow-[0_0_15px_rgba(244,63,94,0.4)]',
+    text: 'text-red-400',
+    solid: '#DC2626',
   },
   green: {
-    text: 'text-emerald-400',
-    bg: 'bg-emerald-950/40',
-    border: 'border-emerald-500/50',
-    glow: 'shadow-[0_0_15px_rgba(16,185,129,0.4)]',
+    text: 'text-green-400',
+    solid: '#16A34A',
   },
   yellow: {
-    text: 'text-amber-400',
-    bg: 'bg-amber-950/40',
-    border: 'border-amber-500/50',
-    glow: 'shadow-[0_0_15px_rgba(245,158,11,0.4)]',
+    text: 'text-yellow-300',
+    solid: '#EAB308',
   },
   blue: {
     text: 'text-blue-400',
-    bg: 'bg-blue-950/40',
-    border: 'border-blue-500/50',
-    glow: 'shadow-[0_0_15px_rgba(59,130,246,0.4)]',
+    solid: '#2563EB',
   },
 };
 
@@ -49,13 +41,16 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
 
   return (
     <div
-      className={`player-card relative p-2.5 sm:p-3 rounded-2xl border transition-all duration-300 backdrop-blur-md ${
-        theme.bg
-      } ${
+      className={`player-card relative p-2.5 sm:p-3 rounded-xl border bg-slate-900 transition-all duration-300 ${
         isActive
-          ? `${theme.border} ${theme.glow} ring-2 ring-white/40 scale-[1.02]`
-          : 'border-white/10 opacity-90'
+          ? 'border-white/70 scale-[1.02]'
+          : 'border-slate-700/80 opacity-90'
       }`}
+      style={
+        isActive
+          ? { borderLeft: `5px solid ${theme.solid}`, boxShadow: `0 0 14px ${theme.solid}55` }
+          : { borderLeft: `5px solid ${theme.solid}` }
+      }
     >
       {/* Active turn countdown indicator banner */}
       {isActive && timerSeconds !== undefined && (
@@ -74,11 +69,13 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
           )}
 
           <div
-            className={`w-11 h-11 rounded-full overflow-hidden border-2 relative bg-slate-800 ${
-              player.isSpeaking
-                ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)] ring-2 ring-emerald-300/60'
-                : theme.border
-            }`}
+            className="w-11 h-11 rounded-full overflow-hidden relative bg-slate-800"
+            style={{
+              border: `2px solid ${player.isSpeaking ? '#34d399' : theme.solid}`,
+              boxShadow: player.isSpeaking
+                ? '0 0 12px rgba(52,211,153,0.8)'
+                : undefined,
+            }}
           >
             <img
               src={player.avatar}
